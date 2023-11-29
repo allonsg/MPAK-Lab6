@@ -48,7 +48,6 @@ const createCertificate = (password) => {
             value: 'Test'
         }];
 
-    // Створення поля з інформацією про видавця сертифіката
     cert.setSubject(attrs);
     cert.setIssuer(attrs);
     cert.setExtensions([
@@ -131,7 +130,7 @@ const getKeysFromCert = async () => {
     return {publicKey, privateKey}
 };
 
-const encryptMessage = (iv, sessionKey, plainText) => {
+const encryptFile = (iv, sessionKey, plainText) => {
     const cipher = forge.cipher.createCipher('AES-CBC', sessionKey);
     cipher.start({iv: iv});
     cipher.update(forge.util.createBuffer(plainText, 'utf8'));
@@ -145,7 +144,6 @@ const asymmetricEncrypt = async (data) => {
     const encryptedSymmetricKey = forge.util.encode64(encrypted);
     return encryptedSymmetricKey;
 };
-
 
 const decryptData = async ({initVector, key, encryptedMessage}) => {
     try {
@@ -168,34 +166,42 @@ const decryptData = async ({initVector, key, encryptedMessage}) => {
         throw new Error('Failed to decrypt data');
     }
 };
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
 
-rl.question('Enter a message to encrypt: ', async (message) => {
-    const messageTrimmed = message.trim();
+rl.question('Enter the path to the file to encrypt: ', async (filePath) => {
+    const fileData = await fs.readFile(filePath);
+    const base64FileData = fileData.toString('base64');
 
-    const certificateInBase64 = await  getCertificateInBase64()
-    console.log("certificate in Base64: ", certificateInBase64)
+    const certificateInBase64 = await getCertificateInBase64();
+    console.log("certificate in Base64: ", certificateInBase64);
 
     const {sessionKey, iv} = generateSessionKey();
     console.log('Session key: ', sessionKey);
     console.log('IV: ', iv);
 
-    const encryptedMessage = encryptMessage(iv, sessionKey, messageTrimmed);
-    console.log('Encrypted message: ', encryptedMessage);
+    const encryptedFileData = encryptFile(iv, sessionKey, base64FileData);
+    console.log('Encrypted file data: ', encryptedFileData);
 
     const encryptedIv = await asymmetricEncrypt(iv);
-    console.log("Encrypted IV: ", encryptedIv)
+    console.log("Encrypted IV: ", encryptedIv);
 
     const encryptedSessionKey = await asymmetricEncrypt(sessionKey);
-    console.log("Encrypted Session Key: ", encryptedSessionKey)
+    console.log("Encrypted Session Key: ", encryptedSessionKey);
 
-    const decryptedMessage = await decryptData({
+    const decryptedFileData = await decryptData({
         initVector: encryptedIv,
         key: encryptedSessionKey,
-        encryptedMessage,
+        encryptedMessage: encryptedFileData,
     });
-    console.log("Decrypted message: ", decryptedMessage);
+    console.log("Decrypted file data: ", decryptedFileData);
+
+    // Save the encrypted file
+    await fs.writeFile('encryptedFile.txt', encryptedFileData.data, 'utf8');
+    // Save the decrypted file
+    await fs.writeFile('decryptedFile.txt', Buffer.from(decryptedFileData, 'base64'));
+
 });
